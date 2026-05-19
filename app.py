@@ -1,13 +1,15 @@
 import streamlit as st
-import streamlit as st
-# (Keep your other imports like google.genai here too!)
+import json
+import os
+from google import genai
+from google.genai import types
 
 # ==========================================
-# 1. PAGE CONFIGURATION & SIDEBAR (NEW UI)
+# 1. PAGE CONFIGURATION & SIDEBAR (BIA UI)
 # ==========================================
 st.set_page_config(page_title="Smart E-Commerce Agent", page_icon="🛍️", layout="wide")
 
-# This creates the clean left-hand panel your teacher will love
+# Beautiful left-hand status panel for your presentation
 with st.sidebar:
     st.title("⚙️ Agent Dashboard")
     st.markdown("---")
@@ -27,28 +29,22 @@ with st.sidebar:
     st.caption("BIA Capstone Project • Developer: Hemant Sharma")
 
 # ==========================================
-# 2. MAIN CHAT INTERFACE CLEANUP
+# 2. MAIN HEADER INTERFACE
 # ==========================================
 st.title("🛍️ Smart E-Commerce Assistant")
-st.pills(label="Suggested Queries:", options=["Check Order Status", "Return Policy", "View Product Catalog"], disabled=True)
 st.write("Welcome! I am an autonomous AI agent capable of answering catalog questions, checking live orders, or routing you to human support if needed.")
 st.markdown("---")
 
-# ... (Keep the rest of your existing chat history loop and Gemini logic below this!)
-import json
-import os
-from google import genai
-from google.genai import types
-
-st.set_page_config(page_title="E-Commerce AI Agent", page_icon="🛍️", layout="centered")
-st.header("Smart E-Commerce Assistant")
-st.text("Welcome! I can help you with product details, store policies, or tracking your order.")
+# Environment Check
 if "GEMINI_API_KEY" not in os.environ:
     st.warning("Please set your GEMINI_API_KEY environment variable to run the agent.")
     st.stop()
 
 client = genai.Client()
 
+# ==========================================
+# 3. KNOWLEDGE BASE & TOOLS DEFINITION
+# ==========================================
 @st.cache_data
 def load_knowledge_base():
     policies, faq, products = "", "", ""
@@ -77,29 +73,42 @@ def create_return_request(order_id: str, reason: str) -> str:
 
 tools_map = {"get_order_status": get_order_status, "create_return_request": create_return_request}
 
+# ==========================================
+# 4. CHAT HISTORY DISPLAY
+# ==========================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# Using native Streamlit markdown layout instead of raw text blocks
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.text(message["content"])
+        st.markdown(message["content"])
 
+# ==========================================
+# 5. AGENT LOGIC & EXECUTION
+# ==========================================
 if user_input := st.chat_input("How can I help you today?"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.text(user_input)
+        st.markdown(user_input)
 
+    # Core System Instruction: Notice Guardrail #4 is now securely packed inside the system prompt string
     system_instruction = f"""
     You are an expert E-Commerce Customer Support AI Agent. Tone: polite and professional.
+    
     1. RAG KNOWLEDGE: Use the context below to answer queries (e.g. shipping fees, monitor specs).
     {knowledge_context}
+    
     2. TOOL CALLING: For order status or returns, ask for Order ID and use your tools.
+    
     3. FALLBACK: If unresolved, say exactly: 'I am routing you to a live human support specialist who can assist you further.'
+    
+    4. SAFETY GUARDRAIL: If the user uses profanity, asks for competitor information, or displays abusive behavior, do not argue. Politely state: 'I am routing you to a manager to resolve this issue immediately' and stop.
     """
-    "4. SAFETY GUARDRAIL: If the user uses profanity, asks for competitor information, or displays abusive behavior, do not argue. Politely state: 'I am routing you to a manager to resolve this issue immediately' and stop."
 
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
+        
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=user_input,
@@ -128,6 +137,5 @@ if user_input := st.chat_input("How can I help you today?"):
         else:
             ai_reply = response.text
 
-        response_placeholder.text(ai_reply)
+        response_placeholder.markdown(ai_reply)
         st.session_state.messages.append({"role": "assistant", "content": ai_reply})
-        
